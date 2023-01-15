@@ -346,7 +346,7 @@ void TestAddedFoundDocument() {
 }
 
 // Поддержка минус-слов. Документы, содержащие минус-слова поискового запроса, не должны включаться в результаты поиска.
-void ExcludedMinudsWords() {
+void TestExcludedMinudsWords() {
     SearchServer server;
     server.AddDocument(1, "on the street is rainy day"s, DocumentStatus::ACTUAL, { 8, -3, 2 });
     server.AddDocument(2, "guys play on street"s, DocumentStatus::ACTUAL, { 7, 2, 12 });
@@ -360,14 +360,16 @@ void TestMatched() {
     SearchServer server;
     server.AddDocument(1, "on the street is rainy day"s, DocumentStatus::ACTUAL, { 8, -3, 2 });
     server.AddDocument(2, "guys play on street"s, DocumentStatus::ACTUAL, { 7, 2, 12 });
-    server.AddDocument(3, "black and white dog plays with ball"s, DocumentStatus::ACTUAL, { 5, 12, -4 });
-    const auto found_doc = server.FindTopDocuments("guys rainy street -dog"s);
-    ASSERT_EQUAL_HINT(found_doc.size(), 2, "The number of matching documents is incorrect");
-    ASSERT_EQUAL(found_doc[0].id, 2);
+    const auto match_word = server.MatchDocument("-on the -street is rainy day"s, 1);
+    const auto [str, doc] = match_word;
+    ASSERT_HINT(str.empty(), "Matching words not be found");
+    const auto match_word2 = server.MatchDocument("-guys -play on street"s, 2);
+    const auto [str2, doc2] = match_word;
+    ASSERT_HINT(str2.empty(), "Matching words not be found");
 }
 
 // Сортировка найденных документов по релевантности. Возвращаемые при поиске документов результаты должны быть отсортированы в порядке убывания релевантности.
-void TestRelevance() {
+void TestSortByRelevance() {
     SearchServer server;
     server.AddDocument(1, "dog play on the street with ball in rainy day"s, DocumentStatus::ACTUAL, { 2,3,4 });
     server.AddDocument(2, "dog play on street"s, DocumentStatus::ACTUAL, { 2,3,4 });
@@ -376,22 +378,25 @@ void TestRelevance() {
     const auto found_doc = server.FindTopDocuments("dog play street rainy");
     ASSERT_EQUAL(found_doc.size(), 4);
     ASSERT_EQUAL(found_doc[0].id, 2);
-}
+    ASSERT_EQUAL(found_doc[1].id, 1);
+    ASSERT_EQUAL(found_doc[2].id, 3);
+    ASSERT_EQUAL(found_doc[3].id, 4);
+   }
 
 // Вычисление рейтинга документов. Рейтинг добавленного документа равен среднему арифметическому оценок документа.
-void TestRatings() {
+void TestCalculationRatings() {
     SearchServer server;
-    server.AddDocument(1, "dog play on the street in rainy day"s, DocumentStatus::ACTUAL, { 1, 1, 1,1 });
-    server.AddDocument(4, "dog and cat hates each other"s, DocumentStatus::ACTUAL, { 4,4,4,4,4 });
+    server.AddDocument(1, "dog play on the street in rainy day"s, DocumentStatus::ACTUAL, { 1, 1, 1, 1 });
+    server.AddDocument(4, "dog and cat hates each other"s, DocumentStatus::ACTUAL, { 4, 4, 4, 4, 4 });
     vector<Document> found_doc = server.FindTopDocuments("dog"s);
-    ASSERT_EQUAL_HINT(found_doc[0].rating, 4, "Incorrect rating");
-    ASSERT_EQUAL_HINT(found_doc[1].rating, 1, "Incorrect rating");
-}
+    ASSERT_EQUAL_HINT(found_doc[0].rating, (4*5)/5, "Incorrect rating");
+    ASSERT_EQUAL_HINT(found_doc[1].rating, (1*4)/4, "Incorrect rating");
+    }
 
 
 
 // Фильтрация результатов поиска с использованием предиката, задаваемого пользователем.
-void TestPredicate() {
+void TestFindDocumentByPredicate() {
     SearchServer search_server;
     search_server.SetStopWords("и в на"s);
 
@@ -401,16 +406,6 @@ void TestPredicate() {
     search_server.AddDocument(3, "ухоженный скворец евгений"s, DocumentStatus::BANNED, { 9 });
 
     {
-        const auto found_docs = search_server.FindTopDocuments("пушистый ухоженный кот"s);
-        const Document& doc0 = found_docs[0];
-        ASSERT_EQUAL(doc0.id, 1);
-    }
-    {
-        const auto found_docs = search_server.FindTopDocuments("пушистый ухоженный кот"s, DocumentStatus::BANNED);
-        const Document& doc0 = found_docs[0];
-        ASSERT_EQUAL(doc0.id, 3);
-    }
-    {
         const auto found_docs = search_server.FindTopDocuments("пушистый ухоженный кот"s, [](int document_id, DocumentStatus /*status*/, int /*rating*/) { return document_id % 2 == 0; });
         const Document& doc0 = found_docs[0];
         ASSERT_EQUAL(doc0.id, 0);
@@ -418,7 +413,7 @@ void TestPredicate() {
 }
 
 // Поиск документов, имеющих заданный статус.
-void TestStatus() {
+void TestFindDocumentByStatus() {
     SearchServer server;
     server.AddDocument(0, "black dog play on the street in rainy day"s, DocumentStatus::ACTUAL, { 8, -3, 2 });
     server.AddDocument(1, "black guys play on street"s, DocumentStatus::IRRELEVANT, { 7, 2, -12 });
@@ -456,7 +451,7 @@ void TestCorrectRelevance() {
 void TestSearchServer() {
     RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
     RUN_TEST(TestAddedFoundDocument);
-    RUN_TEST(ExcludedMinudsWords);
+    RUN_TEST(TestExcludedMinudsWords);
     RUN_TEST(TestMatched);
     RUN_TEST(TestRelevance);
     RUN_TEST(TestRatings);
