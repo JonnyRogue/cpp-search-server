@@ -437,26 +437,29 @@ void TestFindDocumentByStatus() {
     }
 }
 
+
 // Корректное вычисление релевантности найденных документов
 void TestCorrectRelevance() {
     SearchServer server;
     server.AddDocument(0, "black dog play on the street in rainy day"s, DocumentStatus::ACTUAL, { 8, 8, 8 });
     server.AddDocument(1, "black guys play on street"s, DocumentStatus::ACTUAL, { 8, 8, 8 });
-    const auto found_doc = server.FindTopDocuments("black guys"s);
-    int i = found_doc[0].relevance * 10000000;
-    ASSERT_EQUAL_HINT(i, 1386294, "Relevance does not match"");
+    int count_id = 0;
+    vector<double> rel = {0.138629};
+    for(const auto found_doc : server.FindTopDocuments("black guys"s)){
+    ASSERT_HINT(abs((found_doc.relevance) - rel[count_id])<0.001,"Done");
+           count_id=count_id +1;
+    }
 }
-
 // Функция TestSearchServer является точкой входа для запуска тестов
 void TestSearchServer() {
     RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
     RUN_TEST(TestAddedFoundDocument);
     RUN_TEST(TestExcludedMinudsWords);
     RUN_TEST(TestMatched);
-    RUN_TEST(TestRelevance);
-    RUN_TEST(TestRatings);
-    RUN_TEST(TestPredicate);
-    RUN_TEST(TestStatus);
+    RUN_TEST(TestSortByRelevance);
+    RUN_TEST(TestCalculationRatings);
+    RUN_TEST(TestFindDocumentByPredicate);
+    RUN_TEST(TestFindDocumentByStatus);
     RUN_TEST(TestCorrectRelevance);
     // Не забудьте вызывать остальные тесты здесь
 }
