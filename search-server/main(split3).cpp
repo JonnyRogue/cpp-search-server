@@ -23,13 +23,13 @@ string ReadLine() {
 }
 
 int ReadLineWithNumber() {
-    int result = 0;
+    int result;
     cin >> result;
     ReadLine();
     return result;
 }
 
-vector<string> SplitIntoWords(const string& text) {  //вектор дробления на слова.
+vector<string> SplitIntoWords(const string& text) {
     vector<string> words;
     string word;
     for (const char c : text) {
@@ -50,10 +50,29 @@ vector<string> SplitIntoWords(const string& text) {  //вектор дробле
 }
 
 struct Document {
-    int id;
-    double relevance;
-    int rating;
+    Document() = default;
+
+    Document(int id, double relevance, int rating)
+        : id(id)
+        , relevance(relevance)
+        , rating(rating) {
+    }
+
+    int id = 0;
+    double relevance = 0.0;
+    int rating = 0;
 };
+
+template <typename StringContainer>
+set<string> MakeUniqueNonEmptyStrings(const StringContainer& strings) {
+    set<string> non_empty_strings;
+    for (const string& str : strings) {
+        if (!str.empty()) {
+            non_empty_strings.insert(str);
+        }
+    }
+    return non_empty_strings;
+}
 
 enum class DocumentStatus {
     ACTUAL,
@@ -63,29 +82,46 @@ enum class DocumentStatus {
 };
 
 class SearchServer {
+public:
     
-  public:
-    void SetStopWords(const string& text) {
-        for (const string& word : SplitIntoWords(text)) {
-            stop_words_.insert(word);
+    template <typename StringContainer>
+    explicit SearchServer(const StringContainer& stop_words) : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
+        for (const auto& stop_word : stop_words_) { 
+            if (IsValidWord(stop_word) == false) {  
+                throw invalid_argument("Stop words contain invalid characters"s);
+            }
         }
     }
 
-    void AddDocument(int document_id, const string& document, DocumentStatus status,
-                     const vector<int>& ratings) {
+    explicit SearchServer(const string& stop_words_text)
+        : SearchServer(SplitIntoWords(stop_words_text))  // Invoke delegating constructor from string container
+    {
+    }
+
+    void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
+        if (document_id<0) {
+            throw invalid_argument("Document with negative id");
+        }
+        if (documents_.count(document_id)) {
+            throw invalid_argument("Document with this id already exists");
+        }
+        if (IsValidWord(document) == false) {
+            throw invalid_argument("Document contains invalid characters");
+        }
         const vector<string> words = SplitIntoWordsNoStop(document);
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
             word_to_document_freqs_[word][document_id] += inv_word_count;
         }
+        doc_id.push_back(document_id);
         documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
+        
     }
 
-    template <typename KeyMapper>
-    vector<Document> FindTopDocuments(const string& raw_query, KeyMapper key) //поиск отсортированных документов с шаблоном.
-                                      const  {
+    template <typename DocumentPredicate>
+    vector<Document> FindTopDocuments(const string& raw_query, DocumentPredicate document_predicate) const { 
         const Query query = ParseQuery(raw_query);
-        auto matched_documents = FindAllDocuments(query, key);
+        auto matched_documents = FindAllDocuments(query, document_predicate);
 
         sort(matched_documents.begin(), matched_documents.end(),
              [](const Document& lhs, const Document& rhs) {
@@ -98,23 +134,31 @@ class SearchServer {
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
             matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
         }
-        return matched_documents;
+        return  matched_documents;
+        
     }
-    
-        vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus stat) const {
-        return FindTopDocuments(raw_query, [stat](int, DocumentStatus status, int) { return status == stat; });
-    }   //если статус  указан.
-    
-        vector<Document> FindTopDocuments(const string& raw_query) const {
-         return FindTopDocuments(raw_query, DocumentStatus status) { return status == DocumentStatus::ACTUAL; });
-    } 
+
+    vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus status) const {
+        return FindTopDocuments(raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
+                return document_status == status;});
+    }
+
+    vector<Document> FindTopDocuments(const string& raw_query) const {
+        return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
+    }
 
     int GetDocumentCount() const {
         return documents_.size();
     }
 
-    tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query,
-                                                        int document_id) const {
+    int GetDocumentId(int index) const {
+        
+        if(index < 0 || index > documents_.size()){throw out_of_range("Out of range"s);}
+        
+        return doc_id.at(index);
+    }
+
+    tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
         const Query query = ParseQuery(raw_query);
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
@@ -134,7 +178,9 @@ class SearchServer {
                 break;
             }
         }
-        return {matched_words, documents_.at(document_id).status};
+        auto result = tuple{matched_words, documents_.at(document_id).status};
+        return result;
+        
     }
 
 private:
@@ -146,6 +192,7 @@ private:
     set<string> stop_words_;
     map<string, map<int, double>> word_to_document_freqs_;
     map<int, DocumentData> documents_;
+    vector<int> doc_id;
 
     bool IsStopWord(const string& word) const {
         return stop_words_.count(word) > 0;
@@ -176,12 +223,26 @@ private:
     };
 
     QueryWord ParseQueryWord(string text) const {
+        if(text.empty() == true) {
+            throw invalid_argument("Search query is empty"s);
+        }
+        if (text.back() == '-') {
+            throw invalid_argument("Missing text after minus"s);
+        }
         bool is_minus = false;
+        // Word shouldn't be empty
         if (text[0] == '-') {
             is_minus = true;
             text = text.substr(1);
         }
-        return {text, is_minus, IsStopWord(text)};
+        if(IsValidWord(text)==false) {
+            throw invalid_argument("Invalid characters in the search query"s);
+        }
+        if (text[0] == '-') {
+            throw invalid_argument("More than one minus before words"s); 
+        }
+        return  {text, is_minus, IsStopWord(text)};
+         
     }
 
     struct Query {
@@ -209,22 +270,24 @@ private:
         return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
     }
 
-    template <typename KeyMapper>
-    vector<Document> FindAllDocuments(const Query& query, KeyMapper key) const { // поиск документов с шаблонном
+    template <typename DocumentPredicate>
+    vector<Document> FindAllDocuments(const Query& query,
+                                      DocumentPredicate document_predicate) const {
         map<int, double> document_to_relevance;
         for (const string& word : query.plus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
                 continue;
             }
-            const double idf = IDF(word);
-            for (const auto [document_id, tf] : word_to_document_freqs_.at(word)) { // итерирование по плюс словам с шаблоной функцией и вычисление TFIDF
-                if (key(document_id, documents_.at(document_id).status, documents_.at(document_id).rating)) {
-                    document_to_relevance[document_id] += tf * idf;
+            const double idf_ = IDF(word);
+            for (const auto [document_id, term_freq] : word_to_document_freqs_.at(word)) {
+                const auto& document_data = documents_.at(document_id);
+                if (document_predicate(document_id, document_data.status, document_data.rating)) {
+                    document_to_relevance[document_id] += term_freq * idf_;
                 }
             }
         }
- 
-        for (const string& word : query.minus_words) { //итерирование по минус словам
+
+        for (const string& word : query.minus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
                 continue;
             }
@@ -232,17 +295,23 @@ private:
                 document_to_relevance.erase(document_id);
             }
         }
- 
+
         vector<Document> matched_documents;
         for (const auto [document_id, relevance] : document_to_relevance) {
-            matched_documents.push_back({
-                document_id,
-                relevance,
-                documents_.at(document_id).rating
-            });
+            matched_documents.push_back(
+                {document_id, relevance, documents_.at(document_id).rating});
         }
         return matched_documents;
     }
+
+    static bool IsValidWord(const string& word) {
+        bool i = false;
+        // A valid word must not contain special characters
+        i = none_of(word.begin(), word.end(), [](char c) {
+            return c >= '\0' && c < ' ';
+        });
+        return i;
+    } 
 };
 
 void PrintDocument(const Document& document) {
