@@ -87,7 +87,7 @@ private:
 
 
 template <typename StringContainer>
-     SearchServer:: SearchServer(const StringContainer& stop_words)
+    SearchServer:: SearchServer(const StringContainer& stop_words)
                  :stop_words_(MakeUniqueNonEmptyStrings(stop_words))  // Extract non-empty stop words
     {
         if (!all_of(stop_words_.begin(), stop_words_.end(), IsValidWord)) {
