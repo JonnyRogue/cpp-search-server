@@ -36,4 +36,4 @@ std:: vector<Document> RequestQueue:: AddFindRequest(const std::string& raw_quer
         } 
         requests_.push_back(query);
         return doc;
-    }
+}
