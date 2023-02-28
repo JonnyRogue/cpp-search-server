@@ -1,5 +1,4 @@
 #pragma once
-#include "string_processing.h"
 #include <tuple>
 #include <algorithm>
 #include <cmath>
@@ -10,6 +9,8 @@
 #include <string>
 #include <vector>
 #include "read_input_functions.h"
+#include "string_processing.h"
+#include "log_duration.h" 
 
 using namespace std::string_literals;
 
@@ -36,11 +37,17 @@ explicit   SearchServer(const std::string& stop_words_text)
 
     int GetDocumentCount() const;
 
-    int GetDocumentId(int index) const;
+    std:: set<int>::const_iterator begin() const;
+    
+    std:: set<int>::const_iterator end() const;
+    
+    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
+    
+    void RemoveDocument(int document_id);
 
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query,
                                                         int document_id) const;
-
+    
 private:
     struct DocumentData {
         int rating;
@@ -51,7 +58,8 @@ private:
     const std::set<std::string> stop_words_;
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
     std::map<int, DocumentData> documents_;
-    std::vector<int> document_ids_;
+    std::set<int> document_ids_;
+    std::map<int, std::map<std::string, double>> ids_word_to_document_freqs_;
    
 
     bool IsStopWord(const std::string& word) const;
