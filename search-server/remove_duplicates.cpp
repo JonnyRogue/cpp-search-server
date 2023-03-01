@@ -4,21 +4,24 @@ using namespace std::string_literals;
  
 void RemoveDuplicates(SearchServer& search_server) {
     std::set<int> id_del;
-    std::map<std::set<std::string>, int> unique_words_with_id;
-    for (const int document_id : search_server) {
+    std::set<std::set<std::string>> unique_words_;
+    for (const int doc_id : search_server) {
         std::map<std::string, double> all_words;
         
-        all_words = search_server.GetWordFrequencies(document_id);
+        all_words = search_server.GetWordFrequencies(doc_id);
         std::set<std::string> unique_words;
         
         for (auto [word, _] : all_words) {
             unique_words.insert(word);
         }
+       
+        //Не могу додумать, какую операцию проделать... help)
+        //std::transform(all_words.begin(),all_words.end(),unique_words.begin(), [] 
         
-        if (unique_words_with_id.count(unique_words)) {
-            id_del.insert(document_id);
+        if (unique_words_.count(unique_words)) {
+            id_del.insert(doc_id);
         } else {
-            unique_words_with_id.insert(std::pair{unique_words, document_id});
+            unique_words_.insert(unique_words);
         }
     }
     for (auto id: id_del) {
