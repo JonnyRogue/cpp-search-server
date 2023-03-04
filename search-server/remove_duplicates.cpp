@@ -11,12 +11,7 @@ void RemoveDuplicates(SearchServer& search_server) {
         all_words = search_server.GetWordFrequencies(doc_id);
         std::set<std::string> unique_words;
         
-        for (auto [word, _] : all_words) {
-            unique_words.insert(word);
-        }
-       
-        //Не могу додумать, какую операцию проделать... help)
-        //std::transform(all_words.begin(),all_words.end(),unique_words.begin(), [] 
+        std::transform(all_words.begin(),all_words.end(), inserter(unique_words, unique_words.begin()), [] (auto m) {return m.first;});
         
         if (unique_words_.count(unique_words)) {
             id_del.insert(doc_id);
